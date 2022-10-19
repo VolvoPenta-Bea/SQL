@@ -1,0 +1,137 @@
+/*
+
+Udacity Nanodegree SQL & Python, Introduction to SQL Project. 
+Student: Beatrice Lundgren, beatrice.lundgren@volvo.com 
+
+Note: First question is from given question sets, the others are made up by me.
+
+*/
+
+
+/*
+QUESTION 1
+Create a query that lists each movie, the film category it is classified in, and the number of times it has been rented out. Extract family (cat: Animation, Children, Classics, Comedy, Family and Music.)movies and look at what category is most popular
+*/
+
+SELECT f.title film, 
+	   c.name cat, 
+	   COUNT(r) count_rentals
+FROM   film f
+	   JOIN film_category fc ON  fc.film_id = f.film_id
+	   JOIN category c ON fc.category_id = c.category_id AND f.film_id = fc.film_id
+	   LEFT JOIN inventory i ON i.film_id = f.film_id /*some films might not have been returned*/
+	   LEFT JOIN rental r ON r.inventory_id = i.inventory_id /*some films might never have been on rent*/
+WHERE  c.name = 'Animation' OR 
+	   c.name = 'Children' OR 
+	   c.name = 'Classics' OR
+	   c.name = 'Comedy' OR
+	   c.name = 'Family' OR
+	   c.name = 'Music'
+GROUP BY 1,2
+ORDER BY count_rentals DESC;
+
+/*to figure out category popularity among family categories*/
+SELECT DISTINCT(cat) ,
+	   COUNT(film) OVER (PARTITION BY cat) AS famcat_count 
+FROM   (SELECT f.title film, 
+			   c.name cat, COUNT(r) count_rentals
+		FROM   film f
+			   JOIN film_category fc ON  fc.film_id = f.film_id
+			   JOIN category c ON fc.category_id = c.category_id AND f.film_id = fc.film_id
+			   LEFT JOIN inventory i ON i.film_id = f.film_id
+			   LEFT JOIN rental r ON r.inventory_id = i.inventory_id
+		WHERE  c.name = 'Animation' OR 
+			   c.name = 'Children' OR 
+			   c.name = 'Classics' OR
+			   c.name = 'Comedy' OR
+			   c.name = 'Family' OR
+			   c.name = 'Music'
+		GROUP BY 1,2
+		ORDER BY count_rentals DESC) t1
+ORDER BY famcat_count;
+
+
+
+/*
+QUESTION 2
+a. What is the average rental rate for family movie categories?
+b. is it lower or higher to other categories?
+*/
+
+/*a*/
+SELECT c.name cat, 
+	   ROUND(AVG(f.rental_rate),2) avg_rate
+FROM   film f
+	   JOIN film_category fc ON  fc.film_id = f.film_id
+	   JOIN category c ON fc.category_id = c.category_id AND f.film_id = fc.film_id
+	   LEFT JOIN inventory i ON i.film_id = f.film_id
+	   LEFT JOIN rental r ON r.inventory_id = i.inventory_id
+WHERE  c.name = 'Animation' OR 
+	   c.name = 'Children' OR 
+	   c.name = 'Classics' OR
+	   c.name = 'Comedy' OR
+	   c.name = 'Family' OR
+	   c.name = 'Music'
+GROUP BY 1
+ORDER BY avg_rate DESC;
+
+
+/*b*/
+SELECT DISTINCT(category_of_categories) category, 
+	   ROUND(AVG(rate),2) avg_rate
+FROM (SELECT f.title Film_title, CASE WHEN c.name = 'Animation' THEN 'Family'
+							   WHEN c.name = 'Children' THEN 'Family'
+							   WHEN c.name = 'Classics' THEN 'Family'
+							   WHEN c.name = 'Comedy' THEN 'Family'
+							   WHEN c.name = 'Family' THEN 'Family'
+							   WHEN c.name = 'Music' THEN 'Family'
+							   ELSE 'Other' END Category_of_categories, ROUND(AVG(f.rental_rate),2) rate
+	  FROM film f
+	  	   JOIN film_category fc ON  fc.film_id = f.film_id
+		   JOIN category c ON fc.category_id = c.category_id AND f.film_id = fc.film_id
+		   LEFT JOIN inventory i ON i.film_id = f.film_id
+		   LEFT JOIN rental r ON r.inventory_id = i.inventory_id
+      GROUP BY 1, 2
+	  ORDER BY Category_of_categories DESC) t1
+GROUP BY 1;
+
+
+/*
+QUESTION 3
+Who are the 5 customers that have rented the most in US?
+*/
+
+SELECT DISTINCT(CONCAT(cu.first_name,' ',cu.last_name)) customer_name, 
+	   re.customer_id rentals
+FROM   rental re 
+	   JOIN customer cu ON cu.customer_id = re.customer_id
+	   JOIN address ad ON ad.address_id = cu.address_id
+	   JOIN city ci ON ci.city_id = ad.city_id
+	   JOIN country co ON co.country_id = ci.country_id
+WHERE  co.country = 'United States'
+ORDER BY rentals DESC
+LIMIT 5;
+
+/*
+QUESTION 4
+Are these the same 5 as the one who has paid the most?
+*/
+
+SELECT customer_name, 
+	   rentals, 
+	   amount_paid
+FROM   (SELECT DISTINCT(CONCAT(cu.first_name,' ',cu.last_name)) customer_name, 
+			   re.customer_id rentals, 
+			   ROUND(SUM(amount),0) amount_paid
+		FROM rental re 
+			 JOIN customer cu ON cu.customer_id = re.customer_id
+			 JOIN address ad ON ad.address_id = cu.address_id
+			 JOIN city ci ON ci.city_id = ad.city_id
+			 JOIN country co ON co.country_id = ci.country_id
+			 JOIN payment pa ON pa.customer_id = cu.customer_id
+		WHERE co.country = 'United States'
+		GROUP BY 1,2)t1
+GROUP BY 1,2,3
+ORDER BY amount_paid DESC
+LIMIT 5;
+
